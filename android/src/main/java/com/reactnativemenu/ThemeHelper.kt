@@ -2,6 +2,7 @@ package com.reactnativemenu
 
 import android.content.Context
 import android.content.res.Configuration
+import android.util.TypedValue
 
 object ThemeHelper {
   fun isNight(context: Context): Boolean {
@@ -19,10 +20,30 @@ object ThemeHelper {
     }
   }
 
+  fun isMaterial3Expressive(context: Context): Boolean {
+    val attr = styleIdOrZero("com.google.android.material.R\$attr", "materialButtonStyle")
+    val style = styleIdOrZero("com.google.android.material.R\$style", "Widget_Material3Expressive_Button")
+    if (attr == 0 || style == 0) return false
+
+    val value = TypedValue()
+    return context.theme.resolveAttribute(attr, value, true) && value.resourceId == style
+  }
+
+  // Prefers DynamicColors variant, falls back to static one
+  private fun overlay(prefix: String, dark: Boolean): Int {
+    val variant = if (dark) "Dark" else "Light"
+    val cls = "com.google.android.material.R\$style"
+    return styleIdOrZero(cls, "${prefix}_DynamicColors_$variant").takeIf { it != 0 }
+      ?: styleIdOrZero(cls, "${prefix}_$variant")
+  }
+
+  fun material3Expressive(dark: Boolean): Int {
+    return overlay("ThemeOverlay_Material3Expressive", dark)
+  }
+
   fun material3(dark: Boolean): Int {
     // Reflection ile: Material3 varsa al, yoksa 0 döner
-    val name = if (dark) "ThemeOverlay_Material3_Dark" else "ThemeOverlay_Material3_Light"
-    return styleIdOrZero("com.google.android.material.R\$style", name)
+    return overlay("ThemeOverlay_Material3", dark)
   }
 
   fun appcompat(dark: Boolean): Int {

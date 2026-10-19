@@ -1,21 +1,24 @@
 package com.reactnativemenu
 
+import android.content.Context
 import android.content.res.ColorStateList
 import android.content.res.Resources
 import android.graphics.Color
 import android.graphics.Rect
-import android.os.Build
 import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
 import android.view.*
-import android.widget.PopupMenu
+import androidx.appcompat.view.menu.MenuBuilder
+import androidx.appcompat.view.menu.MenuPopupHelper
 import com.facebook.react.bridge.*
 import com.facebook.react.uimanager.UIManagerHelper
 import com.facebook.react.views.view.ReactViewGroup
 import com.reactnativemenu.ThemeHelper.appcompat
+import com.reactnativemenu.ThemeHelper.isMaterial3Expressive
 import com.reactnativemenu.ThemeHelper.isNight
 import com.reactnativemenu.ThemeHelper.material3
+import com.reactnativemenu.ThemeHelper.material3Expressive
 import java.lang.reflect.Field
 
 
@@ -24,7 +27,9 @@ class MenuView(private val mContext: ReactContext) : ReactViewGroup(mContext) {
   private var uiKit = "auto"
   private var themeVariant = "system"
   private var mIsAnchoredToRight = false
-  private var mPopupMenu: PopupMenu = PopupMenu(context, this)
+  private var mThemedContext: Context = context
+  private var mPopup: MenuPopupHelper? = null
+  private var mPendingSubactions: ReadableArray? = null
   private var mIsMenuDisplayed = false
   private var mIsOnLongPress = false
   private var mGestureDetector: GestureDetector
@@ -98,7 +103,8 @@ class MenuView(private val mContext: ReactContext) : ReactViewGroup(mContext) {
   override fun onDetachedFromWindow() {
     super.onDetachedFromWindow()
     if (mIsMenuDisplayed) {
-      mPopupMenu.dismiss()
+      mPendingSubactions = null
+      mPopup?.dismiss()
     }
   }
 
@@ -147,10 +153,6 @@ class MenuView(private val mContext: ReactContext) : ReactViewGroup(mContext) {
     }
     val attributes = when (config != null && config.hasKey("attributes") && !config.isNull(("attributes"))) {
       true -> config.getMap("attributes")
-      else -> null
-    }
-    val subactions = when (config != null && config.hasKey("subactions") && !config.isNull(("subactions"))) {
-      true -> config.getArray("subactions")
       else -> null
     }
     val menuState = config?.getString("state")
@@ -217,95 +219,74 @@ class MenuView(private val mContext: ReactContext) : ReactViewGroup(mContext) {
       }
       else -> menuItem.isCheckable = false
     }
-
-    // On Android SubMenu cannot contain another SubMenu, so even if there are subactions provided
-    // we are checking if item has submenu (which will occur only for 1 lvl nesting)
-    if (subactions != null && menuItem.hasSubMenu()) {
-      var i = 0
-      val subactionsCount = subactions.size()
-      while (i < subactionsCount) {
-        if (!subactions.isNull(i)) {
-          val subMenuConfig = subactions.getMap(i)
-          val subMenuItem = menuItem.subMenu?.add(Menu.NONE, Menu.NONE, i, subMenuConfig?.getString("title"))
-          if (subMenuItem != null) {
-            prepareMenuItem(subMenuItem, subMenuConfig)
-            subMenuItem.setOnMenuItemClickListener {
-              if (!it.hasSubMenu()) {
-                mIsMenuDisplayed = false
-                if (!subactions.isNull(it.order)) {
-                  val selectedItem = subactions.getMap(it.order)
-                  val dispatcher =
-                    UIManagerHelper.getEventDispatcherForReactTag(mContext, id)
-                  val surfaceId: Int = UIManagerHelper.getSurfaceId(this)
-                  dispatcher?.dispatchEvent(
-                    MenuOnPressActionEvent(surfaceId, id, selectedItem?.getString("id"), id)
-                  )
-                }
-                true
-              } else {
-                false
-              }
-            }
-          }
-        }
-        i++
-      }
-    }
   }
 
   private fun prepareMenu() {
     if (getActionsCount > 0) {
-      mPopupMenu.menu.clear()
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        mPopupMenu.gravity = when (mIsAnchoredToRight) {
-          true -> Gravity.RIGHT
-          false -> Gravity.LEFT
-        }
-      }
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        mPopupMenu.setForceShowIcon(true)
-      }
-      var i = 0
-      while (i < getActionsCount) {
-        if (!mActions.isNull(i)) {
-          val item = mActions.getMap(i)
-          val menuItem = when (item != null && item.hasKey("subactions") && !item.isNull("subactions")) {
-            true -> mPopupMenu.menu.addSubMenu(Menu.NONE, Menu.NONE, i, item.getString("title")).item
-            else -> mPopupMenu.menu.add(Menu.NONE, Menu.NONE, i, item?.getString("title"))
-          }
-          prepareMenuItem(menuItem, item)
-          menuItem.setOnMenuItemClickListener {
-            if (!it.hasSubMenu()) {
-              mIsMenuDisplayed = false
-              if (!mActions.isNull(it.order)) {
-                val selectedItem = mActions.getMap(it.order)
-                val dispatcher =
-                  UIManagerHelper.getEventDispatcherForReactTag(mContext, id)
-                val surfaceId: Int = UIManagerHelper.getSurfaceId(this)
-                dispatcher?.dispatchEvent(
-                  MenuOnPressActionEvent(surfaceId, id, selectedItem?.getString("id"), id)
-                )
-              }
-              true
-            } else {
-              false
-            }
-          }
-        }
-        i++
-      }
-      mPopupMenu.setOnDismissListener {
-        mIsMenuDisplayed = false
-        val dispatcher = UIManagerHelper.getEventDispatcherForReactTag(mContext, id)
-        val surfaceId: Int = UIManagerHelper.getSurfaceId(this)
-        dispatcher?.dispatchEvent(MenuOnCloseEvent(surfaceId, id, id))
-      }
       mIsMenuDisplayed = true
       val dispatcher = UIManagerHelper.getEventDispatcherForReactTag(mContext, id)
       val surfaceId: Int = UIManagerHelper.getSurfaceId(this)
       dispatcher?.dispatchEvent(MenuOnOpenEvent(surfaceId, id, id))
-      mPopupMenu.show()
+      showMenu(mActions)
     }
+  }
+
+  private fun showMenu(actions: ReadableArray) {
+    val menu = MenuBuilder(mThemedContext)
+    var i = 0
+    while (i < actions.size()) {
+      if (!actions.isNull(i)) {
+        val item = actions.getMap(i)
+        val subactions = when (item != null && item.hasKey("subactions") && !item.isNull("subactions")) {
+          true -> item.getArray("subactions")
+          else -> null
+        }
+        val menuItem = when (subactions != null) {
+          true -> menu.addSubMenu(Menu.NONE, Menu.NONE, i, item?.getString("title")).item
+          else -> menu.add(Menu.NONE, Menu.NONE, i, item?.getString("title"))
+        }
+        prepareMenuItem(menuItem, item)
+        menuItem.setOnMenuItemClickListener {
+          if (subactions != null) {
+            mPendingSubactions = subactions
+          } else {
+            mIsMenuDisplayed = false
+            if (!actions.isNull(it.order)) {
+              val selectedItem = actions.getMap(it.order)
+              val dispatcher =
+                UIManagerHelper.getEventDispatcherForReactTag(mContext, id)
+              val surfaceId: Int = UIManagerHelper.getSurfaceId(this)
+              dispatcher?.dispatchEvent(
+                MenuOnPressActionEvent(surfaceId, id, selectedItem?.getString("id"), id)
+              )
+            }
+          }
+          true
+        }
+      }
+      i++
+    }
+
+    val popup = MenuPopupHelper(mThemedContext, menu, this)
+    popup.gravity = when (mIsAnchoredToRight) {
+      true -> Gravity.RIGHT
+      false -> Gravity.LEFT
+    }
+    popup.setForceShowIcon(true)
+    popup.setOnDismissListener {
+      val subactions = mPendingSubactions
+      if (subactions != null) {
+        mPendingSubactions = null
+        showMenu(subactions)
+        return@setOnDismissListener
+      }
+      mIsMenuDisplayed = false
+      val dispatcher = UIManagerHelper.getEventDispatcherForReactTag(mContext, id)
+      val surfaceId: Int = UIManagerHelper.getSurfaceId(this)
+      dispatcher?.dispatchEvent(MenuOnCloseEvent(surfaceId, id, id))
+    }
+    mPopup = popup
+    popup.show()
   }
 
   private fun updateTouchDelegate() {
@@ -361,14 +342,23 @@ class MenuView(private val mContext: ReactContext) : ReactViewGroup(mContext) {
       else -> isNight(context)
     }
 
+    val expressive = when (this.uiKit) {
+      "material3-expressive" -> material3Expressive(dark)
+      "material3", "appcompat" -> 0
+      else -> if (isMaterial3Expressive(context)) material3Expressive(dark) else 0
+    }
+
     val theme = when (this.uiKit) {
-      "material3" -> material3(dark).takeIf { it != 0 } ?: appcompat(dark)
       "appcompat" -> appcompat(dark)
-      else -> material3(dark).takeIf { it != 0 } ?: appcompat(dark)
+      else -> expressive.takeIf { it != 0 } ?: material3(dark).takeIf { it != 0 } ?: appcompat(dark)
     }
 
     val themedCtx = ContextThemeWrapper(context, theme)
 
-    mPopupMenu = PopupMenu(themedCtx, this)
+    if (expressive != 0) {
+      themedCtx.theme.applyStyle(R.style.ThemeOverlay_RNMenu_Material3Expressive, true)
+    }
+
+    mThemedContext = themedCtx
   }
 }

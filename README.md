@@ -181,11 +181,11 @@ String to override theme of the menu. If you want to control theme universally a
 
 ### `uiKit` (Android only)
 
-String to override UI kit of the menu. Allows you to choose between different Android UI implementations.
+String to override UI kit of the menu. Allows you to choose between different Android UI implementations. `auto` uses `material3-expressive` when the app theme inherits from `Theme.Material3Expressive`, `material3` otherwise. Falls back to `appcompat` when Material Components are not available. Material 3 variants use dynamic colors when available.
 
-| Type                                   | Required |
-| -------------------------------------- | -------- |
-| enum('auto', 'material3', 'appcompat') | No       |
+| Type                                                           | Required |
+| -------------------------------------------------------------- | -------- |
+| enum('auto', 'material3-expressive', 'material3', 'appcompat') | No       |
 
 #### `MenuAction`
 

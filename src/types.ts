@@ -14,7 +14,11 @@ export type NativeActionEvent = {
 
 export type MenuThemeVariant = "light" | "dark" | "system";
 
-export type MenuUiKit = "auto" | "material3" | "appcompat";
+export type MenuUiKit =
+	| "auto"
+	| "material3-expressive"
+	| "material3"
+	| "appcompat";
 
 type MenuAttributes = {
 	/**
@@ -155,7 +159,7 @@ type MenuComponentPropsBase = {
 	 */
 	themeVariant?: MenuThemeVariant;
 	/**
-	 * Overrides UI kit of menu to auto, material3 or appcompat
+	 * Overrides UI kit of menu to auto, material3-expressive, material3 or appcompat.
 	 * @platform Android
 	 * @default auto
 	 */
