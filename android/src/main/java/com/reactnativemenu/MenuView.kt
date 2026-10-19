@@ -9,12 +9,14 @@ import android.text.Spannable
 import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
 import android.view.*
+import android.widget.AbsListView
 import androidx.appcompat.view.menu.MenuBuilder
 import androidx.appcompat.view.menu.MenuPopupHelper
 import com.facebook.react.bridge.*
 import com.facebook.react.uimanager.UIManagerHelper
 import com.facebook.react.views.view.ReactViewGroup
 import com.reactnativemenu.ThemeHelper.appcompat
+import com.reactnativemenu.ThemeHelper.color
 import com.reactnativemenu.ThemeHelper.isMaterial3Expressive
 import com.reactnativemenu.ThemeHelper.isNight
 import com.reactnativemenu.ThemeHelper.material3
@@ -30,6 +32,7 @@ class MenuView(private val mContext: ReactContext) : ReactViewGroup(mContext) {
   private var mThemedContext: Context = context
   private var mPopup: MenuPopupHelper? = null
   private var mPendingSubactions: ReadableArray? = null
+  private var mHighlightSelected = false
   private var mIsMenuDisplayed = false
   private var mIsOnLongPress = false
   private var mGestureDetector: GestureDetector
@@ -213,7 +216,15 @@ class MenuView(private val mContext: ReactContext) : ReactViewGroup(mContext) {
 
     // Handle menuState for checkable items
     when (menuState) {
-      "on", "off" -> {
+      "on", "off" -> if (mHighlightSelected) {
+        menuItem.isCheckable = false
+        if (menuState == "on" && titleColor == null && menuItem.isEnabled) {
+          val selectedColor = color(mThemedContext, "colorOnTertiaryContainer")
+          if (selectedColor != null) {
+            menuItem.title = getMenuItemTextWithColor(menuItem.title.toString(), selectedColor)
+          }
+        }
+      } else {
         menuItem.isCheckable = true
         menuItem.isChecked = menuState == "on"
       }
@@ -233,6 +244,8 @@ class MenuView(private val mContext: ReactContext) : ReactViewGroup(mContext) {
 
   private fun showMenu(actions: ReadableArray) {
     val menu = MenuBuilder(mThemedContext)
+    val selectedPositions = mutableListOf<Int>()
+    var position = 0
     var i = 0
     while (i < actions.size()) {
       if (!actions.isNull(i)) {
@@ -246,6 +259,12 @@ class MenuView(private val mContext: ReactContext) : ReactViewGroup(mContext) {
           else -> menu.add(Menu.NONE, Menu.NONE, i, item?.getString("title"))
         }
         prepareMenuItem(menuItem, item)
+        if (menuItem.isVisible) {
+          if (mHighlightSelected && item?.getString("state") == "on") {
+            selectedPositions.add(position)
+          }
+          position++
+        }
         menuItem.setOnMenuItemClickListener {
           if (subactions != null) {
             mPendingSubactions = subactions
@@ -287,6 +306,13 @@ class MenuView(private val mContext: ReactContext) : ReactViewGroup(mContext) {
     }
     mPopup = popup
     popup.show()
+
+    if (selectedPositions.isNotEmpty()) {
+      popup.listView?.let { listView ->
+        listView.choiceMode = AbsListView.CHOICE_MODE_MULTIPLE
+        selectedPositions.forEach { listView.setItemChecked(it, true) }
+      }
+    }
   }
 
   private fun updateTouchDelegate() {
@@ -360,5 +386,6 @@ class MenuView(private val mContext: ReactContext) : ReactViewGroup(mContext) {
     }
 
     mThemedContext = themedCtx
+    mHighlightSelected = expressive != 0
   }
 }

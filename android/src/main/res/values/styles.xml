@@ -2,10 +2,15 @@
 <resources>
   <style name="ThemeOverlay.RNMenu.Material3Expressive" parent="">
     <item name="popupMenuStyle">@style/Widget.RNMenu.Material3Expressive.PopupMenu</item>
+    <item name="listMenuViewStyle">@style/Widget.RNMenu.Material3Expressive.ListMenuView</item>
   </style>
 
   <style name="Widget.RNMenu.Material3Expressive.PopupMenu" parent="Widget.AppCompat.PopupMenu">
     <item name="android:popupBackground">@drawable/rnmenu_material3_expressive_popup_background</item>
     <item name="android:popupElevation">3dp</item>
+  </style>
+
+  <style name="Widget.RNMenu.Material3Expressive.ListMenuView" parent="Widget.AppCompat.ListMenuView">
+    <item name="android:itemBackground">@drawable/rnmenu_material3_expressive_item_background</item>
   </style>
 </resources>

@@ -1,0 +1,2 @@
+-keep class com.google.android.material.R$* { public static <fields>; }
+-keep class androidx.appcompat.R$* { public static <fields>; }

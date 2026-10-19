@@ -29,6 +29,15 @@ object ThemeHelper {
     return context.theme.resolveAttribute(attr, value, true) && value.resourceId == style
   }
 
+  fun color(context: Context, attrName: String): Int? {
+    val attr = styleIdOrZero("com.google.android.material.R\$attr", attrName)
+    if (attr == 0) return null
+
+    val value = TypedValue()
+    if (!context.theme.resolveAttribute(attr, value, true)) return null
+    return if (value.resourceId != 0) context.getColor(value.resourceId) else value.data
+  }
+
   // Prefers DynamicColors variant, falls back to static one
   private fun overlay(prefix: String, dark: Boolean): Int {
     val variant = if (dark) "Dark" else "Light"
